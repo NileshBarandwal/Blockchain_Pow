@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Blockchain Node</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        .block { border: 1px solid #ccc; margin: 10px; padding: 10px; }
+        .miner-list { background: #f0f0f0; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Blockchain Node - ${window.location.host}</h1>
+    
+    <div class="miner-list">
+        <h3>Active Miners</h3>
+        <ul id="miners"></ul>
+    </div>
+
+    <div>
+        <h3>New Transaction</h3>
+        <input type="text" id="sender" placeholder="Sender">
+        <input type="text" id="receiver" placeholder="Receiver">
+        <input type="number" id="amount" placeholder="Amount">
+        <button onclick="sendTransaction()">Send</button>
+    </div>
+
+    <div>
+        <h3>Blockchain</h3>
+        <div id="blocks"></div>
+    </div>
+
+    <script>
+        function updateUI() {
+            // Get active miners
+            axios.get('/miners')
+                .then(res => {
+                    document.getElementById('miners').innerHTML = 
+                        res.data.active_miners.map(m => `<li>${m}</li>`).join('');
+                });
+
+            // Get blockchain
+            axios.get('/chain')
+                .then(res => {
+                    document.getElementById('blocks').innerHTML = 
+                        res.data.map(block => `
+                            <div class="block">
+                                <h4>Block #${block.index}</h4>
+                                <p>Mined by: ${block.miner}</p>
+                                <p>Hash: ${block.hash}</p>
+                                ${block.transactions.map(t => `
+                                    <div>
+                                        ${t.sender} → ${t.receiver}: ${t.amount}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `).join('');
+                });
+        }
+
+        function sendTransaction() {
+            const sender = document.getElementById('sender').value;
+            const receiver = document.getElementById('receiver').value;
+            const amount = document.getElementById('amount').value;
+
+            axios.post('/transactions/new', { sender, receiver, amount })
+                .then(() => alert('Transaction broadcasted!'))
+                .catch(err => alert('Error: ' + err.message));
+        }
+
+        // Auto-refresh every 2 seconds
+        setInterval(updateUI, 2000);
+        updateUI();
+    </script>
+</body>
+</html>
