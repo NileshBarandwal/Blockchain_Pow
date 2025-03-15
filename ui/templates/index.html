@@ -4,9 +4,11 @@
     <title>Blockchain Explorer</title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <style>
-        .block { margin: 20px; padding: 15px; border: 1px solid #ddd; }
-        .tx { margin: 5px 0; padding: 5px; background: #f8f8f8; }
-        .miner-list { background: #e8e8e8; padding: 10px; }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .block { border: 1px solid #ddd; padding: 15px; margin: 10px 0; }
+        .tx { background: #f8f8f8; padding: 5px; margin: 5px 0; }
+        .miner-list { background: #e8e8e8; padding: 10px; margin: 10px 0; }
+        .block-header { background: #f0f0f0; padding: 10px; margin: 10px 0; }
     </style>
 </head>
 <body>
@@ -32,10 +34,10 @@
 
     <script>
         function updateUI() {
-            // Get node address
+            // Update node address
             document.getElementById('nodeAddress').textContent = window.location.host;
 
-            // Get miners
+            // Update miners list
             axios.get('/miners')
                 .then(res => {
                     document.getElementById('minerCount').textContent = res.data.active_miners.length;
@@ -43,22 +45,22 @@
                         res.data.active_miners.map(m => `<li>${m}</li>`).join('');
                 });
 
-            // Get blockchain
+            // Update blockchain display
             axios.get('/chain')
                 .then(res => {
                     document.getElementById('blockHeight').textContent = res.data.length;
                     document.getElementById('blocks').innerHTML = res.data.map(block => `
                         <div class="block">
                             <h3>Block #${block.index}</h3>
+                            <p><strong>Mined By:</strong> ${block.miner}</p>
+                            <p><strong>Timestamp:</strong> ${new Date(block.timestamp * 1000).toLocaleString()}</p>
                             <p><strong>Hash:</strong> ${block.hash}</p>
-                            <p><strong>Mined At:</strong> ${new Date(block.timestamp * 1000).toLocaleString()}</p>
-                            <p><strong>Size:</strong> ${block.block_size} bytes</p>
                             
-                            <div class="header">
+                            <div class="block-header">
                                 <h4>Block Header</h4>
-                                <p>Previous: ${block.block_header.prevBlockHash}</p>
+                                <p>Previous Hash: ${block.previous_hash}</p>
                                 <p>Merkle Root: ${block.block_header.merkleRoot}</p>
-                                <p>Nonce: ${block.block_header.nonce}</p>
+                                <p>Nonce: ${block.nonce}</p>
                             </div>
 
                             <h4>Transactions (${block.tx_count})</h4>
@@ -69,7 +71,7 @@
                                 </div>
                             `).join('')}
                         </div>
-                    `).join('');
+                    `).reverse().join('');
                 });
         }
 
@@ -79,11 +81,11 @@
             const amount = document.getElementById('amount').value;
 
             axios.post('/transactions/new', { sender, receiver, amount })
-                .then(() => alert('Transaction broadcasted!'))
+                .then(() => alert('Transaction submitted!'))
                 .catch(err => alert('Error: ' + err.message));
         }
 
-        // Auto-update every 3 seconds
+        // Auto-refresh every 3 seconds
         setInterval(updateUI, 3000);
         updateUI();
     </script>

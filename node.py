@@ -28,13 +28,15 @@ NODE_ID = str(uuid4())
 NODE_ADDRESS = f"http://{get_lan_ip()}:{os.environ.get('PORT', 5000)}"
 
 class Block:
-    def __init__(self, index, transactions, previous_hash):
+    def __init__(self, index, transactions, previous_hash, miner_address, 
+                 timestamp=None, nonce=0, hash=""):
         self.index = index
-        self.timestamp = time.time()
-        self.transactions = transactions.copy()
+        self.miner = miner_address
+        self.timestamp = timestamp or time.time()
+        self.transactions = transactions
         self.previous_hash = previous_hash
-        self.nonce = 0
-        self.hash = ""
+        self.nonce = nonce
+        self.hash = hash
         self.block_size = 0
         self.tx_count = len(transactions)
         self.block_header = {
@@ -43,17 +45,20 @@ class Block:
             "merkleRoot": self.calculate_merkle_root(),
             "timestamp": self.timestamp,
             "bits": "1d00ffff",
-            "nonce": 0,
-            "blockHash": ""
+            "nonce": nonce,
+            "blockHash": hash
         }
-        self.mine_block()
+        if not hash:
+            self.mine_block()
 
     def calculate_merkle_root(self):
         tx_hashes = [str(tx) for tx in self.transactions]
         return hashlib.sha256(''.join(tx_hashes).encode()).hexdigest()
 
     def calculate_hash(self):
-        block_string = f"{self.index}{self.block_header['prevBlockHash']}{self.block_header['merkleRoot']}{self.block_header['timestamp']}{self.nonce}".encode()
+        block_string = f"{self.index}{self.block_header['prevBlockHash']}" \
+                       f"{self.block_header['merkleRoot']}{self.block_header['timestamp']}" \
+                       f"{self.nonce}".encode()
         return hashlib.sha256(block_string).hexdigest()
 
     def mine_block(self):
@@ -79,9 +84,21 @@ class Blockchain:
         os.makedirs(app.config['BLOCKCHAIN_DATA_DIR'], exist_ok=True)
         try:
             with open(app.config['CHAIN_FILE'], 'r') as f:
-                self.chain = [Block(**block) for block in json.load(f)]
-        except (FileNotFoundError, json.JSONDecodeError):
+                chain_data = json.load(f)
+                self.chain = [
+                    Block(
+                        index=block['index'],
+                        transactions=block['transactions'],
+                        previous_hash=block['previous_hash'],
+                        miner_address=block['miner'],
+                        timestamp=block['timestamp'],
+                        nonce=block['nonce'],
+                        hash=block['hash']
+                    ) for block in chain_data
+                ]
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
             self.chain = []
+            
         try:
             with open(app.config['MINERS_FILE'], 'r') as f:
                 self.miners = json.load(f)
@@ -95,7 +112,7 @@ class Blockchain:
             json.dump(self.miners, f)
 
     def create_genesis_block(self):
-        genesis = Block(0, [], "0")
+        genesis = Block(0, [], "0", "genesis")
         self.chain.append(genesis)
         self.save_data()
 
@@ -114,29 +131,20 @@ class Blockchain:
             try:
                 requests.post(
                     f"{miner}/receive_transaction",
-                    json={"sender": sender, "receiver": receiver, "amount": amount},
+                    json={'sender': sender, 'receiver': receiver, 'amount': amount},
                     timeout=2
                 )
             except:
                 self.remove_miner(miner)
-
-    def register_miner(self, address):
-        if address != NODE_ADDRESS and address not in self.miners:
-            self.miners[address] = time.time()
-            self.save_data()
-
-    def remove_miner(self, address):
-        if address in self.miners:
-            del self.miners[address]
-            self.save_data()
 
     def mine_new_block(self):
         if self.transactions:
             last_block = self.chain[-1]
             new_block = Block(
                 index=len(self.chain),
-                transactions=self.transactions,
-                previous_hash=last_block.hash
+                transactions=self.transactions.copy(),
+                previous_hash=last_block.hash,
+                miner_address=NODE_ADDRESS
             )
             with self.lock:
                 self.chain.append(new_block)
@@ -150,6 +158,16 @@ class Blockchain:
                 requests.post(f"{miner}/receive_block", json=block.__dict__, timeout=2)
             except:
                 self.remove_miner(miner)
+
+    def register_miner(self, address):
+        if address != NODE_ADDRESS and address not in self.miners:
+            self.miners[address] = time.time()
+            self.save_data()
+
+    def remove_miner(self, address):
+        if address in self.miners:
+            del self.miners[address]
+            self.save_data()
 
 blockchain = Blockchain()
 
@@ -188,9 +206,12 @@ def receive_block():
     new_block = Block(
         block_data['index'],
         block_data['transactions'],
-        block_data['previous_hash']
+        block_data['previous_hash'],
+        block_data['miner'],
+        timestamp=block_data['timestamp'],
+        nonce=block_data['nonce'],
+        hash=block_data['hash']
     )
-    new_block.__dict__.update(block_data)
     
     with blockchain.lock:
         if new_block.index == len(blockchain.chain):
@@ -218,7 +239,6 @@ def peer_sync():
         time.sleep(15)
 
 if __name__ == '__main__':
-    # Auto-register with bootstrap node
     if 'BOOTSTRAP_NODE' in os.environ and os.environ['BOOTSTRAP_NODE'] != NODE_ADDRESS:
         try:
             requests.post(
@@ -226,11 +246,9 @@ if __name__ == '__main__':
                 json={"address": NODE_ADDRESS},
                 timeout=5
             )
-            print(f"Registered with bootstrap node: {os.environ['BOOTSTRAP_NODE']}")
         except Exception as e:
             print(f"Bootstrap registration failed: {str(e)}")
 
-    # Start services
     Thread(target=mining_process, daemon=True).start()
     Thread(target=peer_sync, daemon=True).start()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
