@@ -1,39 +1,44 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Blockchain Node</title>
+    <title>Blockchain Explorer</title>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <style>
-        .block { border: 1px solid #ccc; margin: 10px; padding: 10px; }
-        .miner-list { background: #f0f0f0; padding: 10px; }
+        .block { margin: 20px; padding: 15px; border: 1px solid #ddd; }
+        .tx { margin: 5px 0; padding: 5px; background: #f8f8f8; }
+        .miner-list { background: #e8e8e8; padding: 10px; }
     </style>
 </head>
 <body>
-    <h1>Blockchain Node - ${window.location.host}</h1>
+    <h1>Blockchain Node: <span id="nodeAddress"></span></h1>
     
     <div class="miner-list">
-        <h3>Active Miners</h3>
+        <h3>Active Miners (Total: <span id="minerCount">0</span>)</h3>
         <ul id="miners"></ul>
     </div>
 
     <div>
         <h3>New Transaction</h3>
-        <input type="text" id="sender" placeholder="Sender">
-        <input type="text" id="receiver" placeholder="Receiver">
+        <input type="text" id="sender" placeholder="Sender Address">
+        <input type="text" id="receiver" placeholder="Receiver Address">
         <input type="number" id="amount" placeholder="Amount">
-        <button onclick="sendTransaction()">Send</button>
+        <button onclick="sendTransaction()">Send Transaction</button>
     </div>
 
-    <div>
-        <h3>Blockchain</h3>
+    <div id="blockchain">
+        <h2>Blockchain (Height: <span id="blockHeight">0</span>)</h2>
         <div id="blocks"></div>
     </div>
 
     <script>
         function updateUI() {
-            // Get active miners
+            // Get node address
+            document.getElementById('nodeAddress').textContent = window.location.host;
+
+            // Get miners
             axios.get('/miners')
                 .then(res => {
+                    document.getElementById('minerCount').textContent = res.data.active_miners.length;
                     document.getElementById('miners').innerHTML = 
                         res.data.active_miners.map(m => `<li>${m}</li>`).join('');
                 });
@@ -41,19 +46,30 @@
             // Get blockchain
             axios.get('/chain')
                 .then(res => {
-                    document.getElementById('blocks').innerHTML = 
-                        res.data.map(block => `
-                            <div class="block">
-                                <h4>Block #${block.index}</h4>
-                                <p>Mined by: ${block.miner}</p>
-                                <p>Hash: ${block.hash}</p>
-                                ${block.transactions.map(t => `
-                                    <div>
-                                        ${t.sender} → ${t.receiver}: ${t.amount}
-                                    </div>
-                                `).join('')}
+                    document.getElementById('blockHeight').textContent = res.data.length;
+                    document.getElementById('blocks').innerHTML = res.data.map(block => `
+                        <div class="block">
+                            <h3>Block #${block.index}</h3>
+                            <p><strong>Hash:</strong> ${block.hash}</p>
+                            <p><strong>Mined At:</strong> ${new Date(block.timestamp * 1000).toLocaleString()}</p>
+                            <p><strong>Size:</strong> ${block.block_size} bytes</p>
+                            
+                            <div class="header">
+                                <h4>Block Header</h4>
+                                <p>Previous: ${block.block_header.prevBlockHash}</p>
+                                <p>Merkle Root: ${block.block_header.merkleRoot}</p>
+                                <p>Nonce: ${block.block_header.nonce}</p>
                             </div>
-                        `).join('');
+
+                            <h4>Transactions (${block.tx_count})</h4>
+                            ${block.transactions.map(tx => `
+                                <div class="tx">
+                                    ${tx.sender} → ${tx.receiver} (${tx.amount})
+                                    <br><small>${new Date(tx.timestamp * 1000).toLocaleTimeString()}</small>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `).join('');
                 });
         }
 
@@ -67,8 +83,8 @@
                 .catch(err => alert('Error: ' + err.message));
         }
 
-        // Auto-refresh every 2 seconds
-        setInterval(updateUI, 2000);
+        // Auto-update every 3 seconds
+        setInterval(updateUI, 3000);
         updateUI();
     </script>
 </body>

@@ -1,4 +1,47 @@
 no need to add blockchain_data folder 
+
+Setup Instructions
+On Bootstrap Node (First Computer)
+bash
+Copy
+
+# 1. Create project directory
+mkdir blockchain && cd blockchain
+
+# 2. Create files
+mkdir -p ui/{templates,static} blockchain_data
+touch node.py requirements.txt ui/templates/index.html
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Start node (replace IP with your actual LAN IP)
+export PORT=5000
+export BOOTSTRAP_NODE="http://$(hostname -I | awk '{print $1}'):5000"
+python3 node.py
+
+On Other Computers
+bash
+Copy
+
+# 1. Copy the blockchain folder to other computers using SCP, USB, or Git
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Start node with bootstrap reference
+export PORT=5001  # Different port for each node
+export BOOTSTRAP_NODE="http://<bootstrap-node-ip>:5000"
+python3 node.py
+
+
+
+
+
+
+
+
+
 Testing in Your Lab
 
     Start Bootstrap Node:
